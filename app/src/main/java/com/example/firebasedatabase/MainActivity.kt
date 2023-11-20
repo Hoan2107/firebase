@@ -15,10 +15,12 @@ import java.io.ByteArrayOutputStream
 import java.lang.Exception
 import android.graphics.BitmapFactory
 import android.util.Base64
+import com.google.firebase.storage.FirebaseStorage
+
 
 
 class MainActivity : AppCompatActivity() {
-    var sImage:String?=""
+    var sImage: String? = ""
     private lateinit var binding: ActivityMainBinding
     private lateinit var db: DatabaseReference
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -32,17 +34,36 @@ class MainActivity : AppCompatActivity() {
         val itemRate = binding.etRt.text.toString()
         val itemUnit = binding.etUn.text.toString()
 
-        db = FirebaseDatabase.getInstance().getReference("items")
-        val item = itemDs(itemName, itemRate, itemUnit, sImage)
-        val databaseReference = FirebaseDatabase.getInstance().reference
-        val id = databaseReference.push().key
-        db.child(id.toString()).setValue(item).addOnSuccessListener {
-            binding.etName.text.clear()
-            binding.etRt.text.clear()
-            sImage = ""
-            Toast.makeText(this, "data inserted", Toast.LENGTH_SHORT).show()
-        }.addOnFailureListener {
-            Toast.makeText(this, "data Not inserted", Toast.LENGTH_SHORT).show()
+        // Thực hiện tải ảnh lên Firebase Storage
+        if (!sImage.isNullOrEmpty()) {
+            val storageReference = FirebaseStorage.getInstance().getReference("item_images")
+            val imageFileName = "image_${System.currentTimeMillis()}.jpg"
+            val imageRef = storageReference.child(imageFileName)
+            val imageBytes = Base64.decode(sImage, Base64.DEFAULT)
+
+            imageRef.putBytes(imageBytes)
+                .addOnSuccessListener { taskSnapshot ->
+                    imageRef.downloadUrl.addOnSuccessListener { uri ->
+                        val item = itemDs(itemName, itemRate, itemUnit, uri.toString())
+                        db = FirebaseDatabase.getInstance().getReference("items")
+                        val databaseReference = FirebaseDatabase.getInstance().reference
+                        val id = databaseReference.push().key
+                        db.child(id.toString()).setValue(item).addOnSuccessListener {
+                            binding.etName.text.clear()
+                            binding.etRt.text.clear()
+                            sImage = ""
+                            Toast.makeText(this, "Data inserted", Toast.LENGTH_SHORT).show()
+                        }.addOnFailureListener {
+                            Toast.makeText(this, "Data not inserted", Toast.LENGTH_SHORT).show()
+                        }
+                    }
+                }
+                .addOnFailureListener {
+                    Toast.makeText(this, "Image upload failed", Toast.LENGTH_SHORT).show()
+                }
+        } else {
+            // Xử lý khi không có ảnh được chọn
+            Toast.makeText(this, "Please select an image", Toast.LENGTH_SHORT).show()
         }
     }
 
@@ -71,5 +92,12 @@ class MainActivity : AppCompatActivity() {
                 Toast.makeText(this, ex.message.toString(), Toast.LENGTH_LONG).show()
             }
         }
+
+    }
+
+    fun showList(view: View) {
+        var i: Intent
+        i = Intent(this, ItemList::class.java)
+        startActivity(i)
     }
 }
